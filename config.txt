@@ -1,0 +1,26 @@
+[Root]
+actions = [ Get , Put ]
+
+[Get]
+actions = [ Pickup , Navigate ]
+
+[Put]
+actions = [ Putdown , Navigate ]
+
+[Pickup]
+
+[Putdown]
+
+[Navigate]
+param = True
+actions = [ North, South , East , West ]
+
+[North]
+
+[South]
+
+[East]
+
+[West]
+
+
