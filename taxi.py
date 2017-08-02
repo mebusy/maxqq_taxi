@@ -230,6 +230,15 @@ def MAXQ_Q( i  , s  ) :
         # end else 
     return seq 
 
+class AbstractCvalues( defaultdict  ) :
+    def __setitem__(self, key, value):
+        i,s,a = key  
+        # print i,s,a 
+        super( AbstractCvalues , self  ).__setitem__( key, value)
+
+    def __getitem( self, key  ) :
+        i,s,a = key 
+        super( AbstractCvalues , self  ).__getitem__( key)
          
 
 if __name__ == '__main__' :
@@ -237,8 +246,8 @@ if __name__ == '__main__' :
 
     env = gym.make('Taxi-v2') 
     s = env.reset()
-
-    Cvalues = defaultdict( float  )
+    
+    Cvalues = AbstractCvalues ( float )
     Vvalues = defaultdict( float  ) 
     CTildevalues = defaultdict( float   ) 
 
