@@ -1,15 +1,17 @@
 import ConfigParser
 
-config = None 
+__config = None 
 
 
 def getMaxNodes(  ) :
-    global config 
-    return config.sections()
+    global __config 
+    return __config.sections()
 
 def isPrimitiveAction( action ):
-    global config
-    return not config.has_option( action , "actions"  )
+    if isinstance (action ,tuple) :
+        action , _ = action 
+    global __config
+    return not __config.has_option( action , "actions"  )
 
 def getPrimitiveActions() :
     max_nodes = getMaxNodes(  ) 
@@ -22,40 +24,59 @@ def getCompositeActions():
     return comp_actions
     
 
-def getAvailableActions( action ) :
+# dict_param_bound :
+# { "Nav" : [0,1,2,3] , "Shoot" : [5,6,7] }
+from itertools import repeat , chain
+def getAvailableActions( action  , dict_param_bound ) :
+    if isinstance (action ,tuple) :
+        action , param  = action 
+
     if isPrimitiveAction(action):
-        return action 
+        return [(action , param )]
     else:
-        actions = config.get( action , "actions").translate( None, '[]' ).split( "," )
+        actions = __config.get( action , "actions").translate( None, '[]' ).split( "," )
         actions = map(str.strip , actions ) 
+        # if dict_param_bound and not set( dict_param_bound.keys() ).isdisjoint( actions )  :
+        # print 'extending'
+        actions = map( lambda x: [(x,None)] if not dict_param_bound or x not in dict_param_bound else zip(repeat( x ) , dict_param_bound[x] )  , actions )
+        actions = list(chain.from_iterable( actions ))
         return actions 
+
+def getImmediateReward( action , bReturnInvalidActionReward = False ) :
+    if bReturnInvalidActionReward:
+        return __config.getfloat( action , "r_invalid" )
+    else:
+        return __config.getfloat( action , "r" )
 
 def visualizeGraph():
     # checking
     max_nodes = getMaxNodes(  )
-    print max_nodes
+    print "max nodes" ,  max_nodes
 
     prim_actions = getPrimitiveActions()
-    print prim_actions
+    print "prim actions" ,  prim_actions
     for a in prim_actions:
-        assert config.has_section( a  )
+        assert __config.has_section( a  )
 
 
     for i in getCompositeActions():
-        available_actions = getAvailableActions( i )
+        available_actions = getAvailableActions( i , None)
         print i, available_actions 
 
         for a in available_actions:
-            assert config.has_section( a  )
+            assert __config.has_section( a[0]  )
 
 
+    for i in getCompositeActions():
+        available_actions = getAvailableActions( i , { "Navigate" : [0,1,2,3] , "Get" : [5,6,7] }  )
+        print "bounded task: " ,i , available_actions
 
 
 
 def parseMaxqGraph():
-    global config 
-    config = ConfigParser.RawConfigParser()
-    config.read('config.txt')
+    global __config 
+    __config = ConfigParser.RawConfigParser()
+    __config.read('config.txt')
 
     visualizeGraph()
 
