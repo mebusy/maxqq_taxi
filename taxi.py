@@ -38,8 +38,8 @@ def ImmediateReward( task, state ):
 
     bInvalid = False 
 
+    taxirow, taxicol, passidx, destidx = decode( state )   
     if task == 'Pickup' :
-        taxirow, taxicol, passidx, destidx = decode( state )   
         # passenger is in taxi,  or not reach passenger
         if passidx  >= 4 or (taxirow, taxicol) != locs[ passidx ] :
             bInvalid = True 
@@ -105,11 +105,21 @@ def EVALUATEMAXNODE(i,s) :
         v_opt = - sys.maxint 
         a_opt = None 
         for j in getAvailableActions( i ,task_bound ) :
+            if not IsActiveState( j,s ):
+                continue 
             v , a =  EVALUATEMAXNODE(j,s) 
             v +=  Cvalues[(i,s,j)]  
             if v > v_opt :
                 v_opt, a_opt = v , a  
         return (  v_opt, a_opt   ) 
+
+def EXECUTEHGPOLICY( s ) :
+    while True :
+        v, a = EVALUATEMAXNODE( ('Root',None) ,s  )
+        s , r, done , _ =  env.step(  task2Action[ a[0] ]    )
+        env.render()
+        if done:
+            break 
 
 
 # true value 
@@ -228,14 +238,14 @@ if __name__ == '__main__' :
     env = gym.make('Taxi-v2') 
     s = env.reset()
 
-    Cvalues = defaultdict( float )
-    Vvalues = defaultdict( float ) 
-    CTildevalues = defaultdict( float ) 
+    Cvalues = defaultdict( float  )
+    Vvalues = defaultdict( float  ) 
+    CTildevalues = defaultdict( float   ) 
 
     debug_reward = []
 
     bRender = False 
-    for i in (xrange(1000)) : 
+    for i in (xrange(400)) : 
         MAXQ_Q( ( 'Root' ,None ) , s  )
 
         state_terminated = False  
@@ -252,5 +262,5 @@ if __name__ == '__main__' :
     # pp.plot( debug_reward  )
     # pp.show()
 
-    print 'done' , state_terminated 
+    print 'done' 
 
