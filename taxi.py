@@ -54,8 +54,8 @@ def ImmediateReward( task, state ):
 def IsActiveState(  i , state   ) :
     task , param = i 
     
-    # if state_terminated:
-    #     return False 
+    if state_terminated:
+        return False 
         
     taxirow, taxicol, passidx, destidx = decode( state )   
     if task == 'Root' : 
@@ -130,6 +130,9 @@ def argmaxQ( i, s , esp_exploaton = False , pseudo_CR = False  ) :
             # eg. when passenger is in taxi , Root->Get will never be active for any state 
             pass
 
+    if len(actions) == 0:
+        return None
+
     if esp_exploaton :
         eps = 0.1
         if np.random.random() < eps :
@@ -140,10 +143,10 @@ def argmaxQ( i, s , esp_exploaton = False , pseudo_CR = False  ) :
     return actions[i]
 
 def Q( i,s , a ):
-    return V(a, s) + Cvalues[ (i,s,a) ]
+    return V(a, s) + Cvalues[ (i,s,a) ] if a else 0.0
 
 def Q_tilde( i,s,a ) :
-    return V(a,s) + CTildevalues[ (i,s,a) ] 
+    return V(a,s) + CTildevalues[ (i,s,a) ] if a else 0.0
 
 def R_tilde( i,s ) :
     # if IsTerminalState(i, s) :
@@ -153,6 +156,7 @@ def R_tilde( i,s ) :
     return 0.0
 
 from collections import deque 
+gamma = 1.0 
 alpha = 0.25
 s_prime = None 
 state_terminated = False 
@@ -169,6 +173,12 @@ def MAXQ_Q( i  , s  ) :
     
     if isPrimitiveAction( i) :  # primitive MaxNode
         s_prime  , r , state_terminated , _ = env.step( task2Action[ i[0] ] ) 
+        
+        meanCumulativeReward = debug_reward[-1] if len(debug_reward) >0 else 0.0 
+        newMean = meanCumulativeReward + ( r - meanCumulativeReward  ) / ( len(debug_reward)+1 ) 
+        debug_reward.append( newMean  )
+
+
         if bRender :
             env.render() 
         Vvalues[(i,s)] = (1.0 - alpha) * Vvalues[(i,s)] + alpha * r
@@ -180,18 +190,22 @@ def MAXQ_Q( i  , s  ) :
             # choose an action a according to the current exploration policy pi_x(i,s)
             # Q tilde , with exploation 
             a = argmaxQ ( i,s , bExplore , True  )
+            if not a:
+                break 
 
             childSeq = MAXQ_Q(a,s)  # childSeq is the sequence of states visited , in reverse order
             
             # here we needobserve result state s' , saved in global variable s_prime
             # Q tilde, without exploation 
             a_opt = argmaxQ( i, s_prime , False , True   )
+            if not a_opt:
+                break
+
             N = 1
             for _s in childSeq:
                 # first update CTildevalues using a_opt 
                 # this update include R_tilde 
                 # in paper , the last term is V(a*,s) , not V(a*,s'))
-                gamma = 1.0 
                 d = gamma**N 
                 # CTildevalues[(i,s_prime,a_opt)] + V(a_opt, s_prime  => Q_tilde
                 CTildevalues[(i,_s,a)] = (1-alpha)*CTildevalues[(i,_s,a)] + alpha*d*( R_tilde(i,s_prime) + Q_tilde( i, s_prime , a_opt  )  ) 
@@ -218,18 +232,25 @@ if __name__ == '__main__' :
     Vvalues = defaultdict( float ) 
     CTildevalues = defaultdict( float ) 
 
+    debug_reward = []
+
     bRender = False 
-    for i in (xrange(400)) : 
+    for i in (xrange(1000)) : 
         MAXQ_Q( ( 'Root' ,None ) , s  )
+
+        state_terminated = False  
         print 'episode '  , i  , V(  ( 'Root' ,None ) , s  )
         s = env.reset() 
         s_prime = None          
-        state_terminated = False  
 
     bRender = True 
     bExplore = False 
     s = env.reset()
     MAXQ_Q( ( 'Root' ,None ) , s  )
+
+    # import matplotlib.pyplot as pp
+    # pp.plot( debug_reward  )
+    # pp.show()
 
     print 'done' , state_terminated 
 
