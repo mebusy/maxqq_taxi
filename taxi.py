@@ -50,19 +50,19 @@ def ImmediateReward( task, state ):
 
     return getImmediateReward( task, bInvalid   )
 
+# in argmaxQ , use IsActiveState filter inavailable actions
 def IsActiveState(  i , state   ) :
     task , param = i 
     
     # if state_terminated:
     #     return False 
-
         
     taxirow, taxicol, passidx, destidx = decode( state )   
     if task == 'Root' : 
         return not state_terminated 
-    elif task == 'Get' or task == 'Pickup' :
+    elif task == 'Get' :
         return not passidx >= 4   # not in taxi
-    elif task == 'Put' or task == 'Putdown' :
+    elif task == 'Put':
         return not passidx < 4    # in taxi
     elif task == 'Navigate' :
         return not (taxirow, taxicol) == locs[param ]
