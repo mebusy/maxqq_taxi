@@ -52,28 +52,31 @@ def ImmediateReward( task, state ):
 
 def IsActiveState(  i , state   ) :
     task , param = i 
-    if isPrimitiveAction(task) :
-        return True  #  can be performed in any state
+    
+    # if state_terminated:
+    #     return False 
+
         
     taxirow, taxicol, passidx, destidx = decode( state )   
     if task == 'Root' : 
         return not state_terminated 
-    elif task == 'Get' :
-        return not passidx >= 4 
-    elif task == 'Put' :
-        return not passidx < 4 
+    elif task == 'Get' or task == 'Pickup' :
+        return not passidx >= 4   # not in taxi
+    elif task == 'Put' or task == 'Putdown' :
+        return not passidx < 4    # in taxi
     elif task == 'Navigate' :
         return not (taxirow, taxicol) == locs[param ]
     else :
-        assert False 
+        return True 
 
+# only used for composite task 
 def IsTerminalState(  i , state  ) :
     task , param = i
     if state_terminated:
         return True 
 
     if isPrimitiveAction(task) :
-        return True  # terminate in any state
+        return True  # terminate in any state , because its terminal nodes
         
     taxirow, taxicol, passidx, destidx = decode( state )   
     if task == 'Root' : 
@@ -124,6 +127,7 @@ def argmaxQ( i, s , esp_exploaton = False , pseudo_CR = False  ) :
             actions.append( j ) 
         else :    
             # print "in active state for " , j , i 
+            # eg. when passenger is in taxi , Root->Get will never be active for any state 
             pass
 
     if esp_exploaton :
@@ -142,31 +146,40 @@ def Q_tilde( i,s,a ) :
     return V(a,s) + CTildevalues[ (i,s,a) ] 
 
 def R_tilde( i,s ) :
-    if IsTerminalState(i, s) :
-        return 1.0
-    else:
-        return 0.0
-
+    # if IsTerminalState(i, s) :
+    #     return 1.0
+    # else:
+    #     return 0.0
+    return 0.0
 
 from collections import deque 
 alpha = 0.25
 s_prime = None 
 state_terminated = False 
+
+bExplore = True 
+            
 def MAXQ_Q( i  , s  ) :
     global s_prime , state_terminated 
+    global bExplore 
+
+
     seq = deque()  # be the sequence of states visited while executing i
     # The list of states will be ordered most-recent-first
     
     if isPrimitiveAction( i) :  # primitive MaxNode
         s_prime  , r , state_terminated , _ = env.step( task2Action[ i[0] ] ) 
+        if bRender :
+            env.render() 
         Vvalues[(i,s)] = (1.0 - alpha) * Vvalues[(i,s)] + alpha * r
+        # print Vvalues[(i,s)]
         seq.appendleft( s ) # push 5 onto the beginning of seq
     else:
         # count = 0
         while not IsTerminalState( i,s ) :
             # choose an action a according to the current exploration policy pi_x(i,s)
             # Q tilde , with exploation 
-            a = argmaxQ ( i,s , True , True  )
+            a = argmaxQ ( i,s , bExplore , True  )
 
             childSeq = MAXQ_Q(a,s)  # childSeq is the sequence of states visited , in reverse order
             
@@ -189,6 +202,8 @@ def MAXQ_Q( i  , s  ) :
 
             seq.extend( childSeq )
             s = s_prime 
+            # end while
+        # end else 
     return seq 
 
          
@@ -202,7 +217,19 @@ if __name__ == '__main__' :
     Cvalues = defaultdict( float )
     Vvalues = defaultdict( float ) 
     CTildevalues = defaultdict( float ) 
-    
+
+    bRender = False 
+    for i in (xrange(400)) : 
+        MAXQ_Q( ( 'Root' ,None ) , s  )
+        print 'episode '  , i  , V(  ( 'Root' ,None ) , s  )
+        s = env.reset() 
+        s_prime = None          
+        state_terminated = False  
+
+    bRender = True 
+    bExplore = False 
+    s = env.reset()
     MAXQ_Q( ( 'Root' ,None ) , s  )
 
     print 'done' , state_terminated 
+
