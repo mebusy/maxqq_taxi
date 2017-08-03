@@ -2,10 +2,10 @@
 actions = [ Get , Put ]
 
 [Get]
-actions = [ Pickup , Navigate ]
+actions = [ Navigate , Pickup  ]
 
 [Put]
-actions = [ Putdown , Navigate ]
+actions = [ Navigate ,  Putdown  ]
 
 [Pickup]
 r_invalid = -10
