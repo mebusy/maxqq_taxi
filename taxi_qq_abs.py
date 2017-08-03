@@ -234,7 +234,7 @@ class AbstractVvalues( defaultdict  ) :
         # print s 
         task , param = i 
         # abs1: North, South, East, and West. These terminal nodes require one quantity each
-        if task in [ Task_South,Task_North , Task_East , Task_West ] :
+        if task in ( Task_South,Task_North , Task_East , Task_West ) :
             s = -1
 
         # abs2: Pickup and Putdown each require 2 values (legal and illegal states), 
