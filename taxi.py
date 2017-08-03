@@ -342,12 +342,12 @@ if __name__ == '__main__' :
     
     Cvalues = AbstractCvalues ( float )
     Vvalues = AbstractVvalues( float  ) 
-    CTildevalues =AbstractCvalues( float   ) 
+    CTildevalues = AbstractCvalues( float   ) 
 
     debug_reward = []
 
     bRender = False 
-    for i in (xrange(400)) : 
+    for i in (xrange(300)) : 
         MAXQ_Q( ( Task_Root ,None ) , s  )
 
         state_terminated = False  
