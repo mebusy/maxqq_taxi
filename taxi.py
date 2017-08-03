@@ -5,20 +5,17 @@ from maxqGraph import *
 import sys, operator
 import numpy as np 
 
+def encode( taxirow, taxicol, passloc, destidx):
+    # (5) 5, 5, 4
+    i = taxirow
+    i *= 5
+    i += taxicol
+    i *= 5
+    i += passloc
+    i *= 4
+    i += destidx
+    return i
 
-task2Action = {
-    'South': 0,
-    'North': 1,
-    'East': 2, 
-    'West': 3,
-    'Pickup': 4, 
-    'Putdown': 5,
-}
-action2Task = dict((v,k) for k,v in task2Action.iteritems())
-
-task_bound = { "Navigate" : [0,1,2,3] }
-
-locs = [(0,0), (0,4), (4,0), (4,3)]
 def decode( i):
     out = []
     out.append(i % 4)
@@ -39,11 +36,11 @@ def ImmediateReward( task, state ):
     bInvalid = False 
 
     taxirow, taxicol, passidx, destidx = decode( state )   
-    if task == 'Pickup' :
+    if task == Task_Pickup :
         # passenger is in taxi,  or not reach passenger
         if passidx  >= 4 or (taxirow, taxicol) != locs[ passidx ] :
             bInvalid = True 
-    elif task == 'Putdown' :
+    elif task == Task_Putdown :
         # not in taxi , or not arrive destination 
         if passidx  < 4  or (taxirow, taxicol) != locs[ destidx  ] :
             bInvalid = True 
@@ -58,13 +55,13 @@ def IsActiveState(  i , state   ) :
         return False 
         
     taxirow, taxicol, passidx, destidx = decode( state )   
-    if task == 'Root' : 
+    if task == Task_Root : 
         return not state_terminated 
-    elif task == 'Get' :
+    elif task == Task_Get :
         return not passidx >= 4   # not in taxi
-    elif task == 'Put':
+    elif task == Task_Put:
         return not passidx < 4    # in taxi
-    elif task == 'Navigate' :
+    elif task == Task_Navigate :
         return not (taxirow, taxicol) == locs[param ]
     else :
         return True 
@@ -79,13 +76,13 @@ def IsTerminalState(  i , state  ) :
         return True  # terminate in any state , because its terminal nodes
         
     taxirow, taxicol, passidx, destidx = decode( state )   
-    if task == 'Root' : 
+    if task == Task_Root : 
         return state_terminated 
-    elif task == 'Get' :
+    elif task == Task_Get :
         return passidx >= 4 
-    elif task == 'Put' :
+    elif task == Task_Put :
         return passidx < 4 
-    elif task == 'Navigate' :
+    elif task == Task_Navigate :
         return (taxirow, taxicol) == locs[param ]
     else :
         assert False 
@@ -115,7 +112,7 @@ def EVALUATEMAXNODE(i,s) :
 
 def EXECUTEHGPOLICY( s ) :
     while True :
-        v, a = EVALUATEMAXNODE( ('Root',None) ,s  )
+        v, a = EVALUATEMAXNODE( (Task_Root,None) ,s  )
         s , r, done , _ =  env.step(  task2Action[ a[0] ]    )
         env.render()
         if done:
@@ -184,7 +181,7 @@ def MAXQ_Q( i  , s  ) :
     if isPrimitiveAction( i) :  # primitive MaxNode
         s_prime  , r , state_terminated , _ = env.step( task2Action[ i[0] ] ) 
         
-        meanCumulativeReward = debug_reward[-1] if len(debug_reward) >0 else 0.0 
+        meanCumulativeReward = debug_reward[-1] if len(debug_reward) > 0 else 0.0 
         newMean = meanCumulativeReward + ( r - meanCumulativeReward  ) / ( len(debug_reward)+1 ) 
         debug_reward.append( newMean  )
 
@@ -230,42 +227,138 @@ def MAXQ_Q( i  , s  ) :
         # end else 
     return seq 
 
-class AbstractCvalues( defaultdict  ) :
-    def __setitem__(self, key, value):
-        i,s,a = key  
-        # print i,s,a 
-        super( AbstractCvalues , self  ).__setitem__( key, value)
-
-    def __getitem( self, key  ) :
-        i,s,a = key 
-        super( AbstractCvalues , self  ).__getitem__( key)
          
+
+class AbstractVvalues( defaultdict  ) :
+    def state_abstract(self , i , s) :
+        # print s 
+        task , param = i 
+        # abs1: North, South, East, and West. These terminal nodes require one quantity each
+        if task in [ Task_South,Task_North , Task_East , Task_West ] :
+            s = -1
+
+        # abs2: Pickup and Putdown each require 2 values (legal and illegal states), 
+        elif task == Task_Pickup :
+            taxirow, taxicol, passidx, destidx = decode( s )
+            s = -2 if passidx  >= 4 or (taxirow, taxicol) != locs[ passidx ] else -1
+
+        elif task == Task_Putdown :
+            taxirow, taxicol, passidx, destidx = decode( s )
+            s = -2 if passidx  < 4  or (taxirow, taxicol) != locs[ destidx  ]  else -1 
+
+        return (i,s ) 
+        
+    def __setitem__(self, key, value):
+        key = self.state_abstract( *key ) 
+        return super( AbstractVvalues , self  ).__setitem__( key, value)
+
+    def __getitem__( self, key  ) :
+        key = self.state_abstract( *key ) 
+        # prevent calling __setitem__ again
+        if key not in self :
+            return self.default_factory() 
+        return super( AbstractVvalues , self  ).__getitem__( key)
+
+
+class AbstractCvalues( defaultdict  ) :
+    def state_abstract(self , i , s , a ) :
+        task , param = i 
+        subtask , subparam = a 
+        taxirow, taxicol, passidx, destidx = decode( s ) 
+        # abs3 : QNorth(t), QSouth(t), QEast(t), and QWest(t) each require 100 values 
+        # (four values for t and 25 locations). (Max Node Irrelevance.)
+        # p
+        if task == Task_Navigate:
+            # t is bounded in i
+            s = encode( taxirow, taxicol , 0,0  ) 
+
+        # abs4: QNavigateForGet requires 4 values (for the four possible source locations).
+        # The passenger destination is Max Node Irrelevant for MaxGet
+        # and the taxi starting location is Result Distribution Irrelevant for the Navigate action
+        elif task == Task_Get and subtask == Task_Navigate :
+            s = encode( 0,0, passidx , 0  )
+            
+        # abs5: QPickup requires 100 possible values, 4 possible source locations and 25 possible taxi locations.
+        # p
+        elif task == Task_Get and subtask == Task_Pickup :    
+            s = encode( taxirow, taxicol, passidx , 0  )
+
+        # abs6 : QGet requires 16 possible values(4 source locations, 4 destination locations). (Result Distribution Irrelevance.)
+        # p
+        elif subtask == Task_Get:  # C(Root,s,Get)
+            s = encode( 0,0, passidx , destidx  )
+
+        # abs7: QNavigateForPut requires only 4 values (for the four possible destination locations).
+        elif task == Task_Put and subtask == Task_Navigate :
+            s = encode( 0,0, 0 , destidx  ) 
+
+        # QPutdown requires 100 possible values (25 taxi locations, 4 possible destination locations). 
+        # (Passengersourceis Max Node Irrelevant for MaxPut.)
+        # p
+        elif task == Task_Put and subtask == Task_Putdown :
+            s = encode( taxirow, taxicol, 0, destidx  ) 
+
+        # QPut requires 0 values. (Termination and Shielding.)
+        # p
+        elif subtask == Task_Put:  # C(Root, s, Put)
+            s = -1 
+        return (i,s ,a  )
+
+    def __setitem__(self, key, value):
+        key = self.state_abstract( *key ) 
+        return super(AbstractCvalues , self  ).__setitem__( key, value)
+
+    def __getitem__( self, key  ) :
+        key = self.state_abstract( *key ) 
+        # prevent calling __setitem__ again
+        if key not in self :
+            return self.default_factory() 
+        return super(AbstractCvalues , self  ).__getitem__( key)
+
 
 if __name__ == '__main__' :
     parseMaxqGraph() 
+    for task in getMaxNodes():
+        exec( "Task_{0} = '{1}'".format(  task, task   ) )
+
+
+    task2Action = {
+        Task_South: 0,
+        Task_North: 1,
+        Task_East: 2, 
+        Task_West: 3,
+        Task_Pickup: 4, 
+        Task_Putdown: 5,
+    }
+    action2Task = dict((v,k) for k,v in task2Action.iteritems())
+
+
+    task_bound = { Task_Navigate : [0,1,2,3] }
+
+    locs = [(0,0), (0,4), (4,0), (4,3)]
 
     env = gym.make('Taxi-v2') 
     s = env.reset()
     
     Cvalues = AbstractCvalues ( float )
-    Vvalues = defaultdict( float  ) 
-    CTildevalues = defaultdict( float   ) 
+    Vvalues = AbstractVvalues( float  ) 
+    CTildevalues =AbstractCvalues( float   ) 
 
     debug_reward = []
 
     bRender = False 
     for i in (xrange(400)) : 
-        MAXQ_Q( ( 'Root' ,None ) , s  )
+        MAXQ_Q( ( Task_Root ,None ) , s  )
 
         state_terminated = False  
-        print 'episode '  , i  , V(  ( 'Root' ,None ) , s  )
+        print 'episode '  , i  , V(  ( Task_Root ,None ) , s  )
         s = env.reset() 
         s_prime = None          
 
     bRender = True 
     bExplore = False 
     s = env.reset()
-    MAXQ_Q( ( 'Root' ,None ) , s  )
+    MAXQ_Q( ( Task_Root ,None ) , s  )
 
     # import matplotlib.pyplot as pp
     # pp.plot( debug_reward  )
